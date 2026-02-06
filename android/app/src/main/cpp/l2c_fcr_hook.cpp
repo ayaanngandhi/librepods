@@ -135,9 +135,9 @@ static tBTA_STATUS (*original_BTA_DmSetLocalDiRecord)(tSDP_DI_RECORD* p_device_i
 static char g_detected_bt_library[64] = "libbluetooth_jni.so";
 
 // Forward declarations for symbol lookup functions
-static uintptr_t getModuleBase(const char *module_name);
-static bool findLibraryPath(const char* module_name, char* path_out, size_t path_size);
-static uintptr_t findSymbolOffset(const char* symbol_name, const char* module_name);
+uintptr_t getModuleBase(const char *module_name);
+bool findLibraryPath(const char* module_name, char* path_out, size_t path_size);
+uintptr_t findSymbolOffset(const char* symbol_name, const char* module_name);
 
 uint8_t fake_l2c_fcr_chk_chan_modes(void* p_ccb) {
     LOGI("l2c_fcr_chk_chan_modes hooked, returning true.");
@@ -376,7 +376,7 @@ uintptr_t loadL2cuSendPeerInfoReqOffset() {
     return 0;
 }
 
-static uintptr_t getModuleBase(const char *module_name) {
+uintptr_t getModuleBase(const char *module_name) {
     FILE *fp;
     char line[1024];
     uintptr_t base_addr = 0;
@@ -404,7 +404,7 @@ static uintptr_t getModuleBase(const char *module_name) {
 }
 
 // Find full library path from /proc/self/maps
-static bool findLibraryPath(const char* module_name, char* path_out, size_t path_size) {
+bool findLibraryPath(const char* module_name, char* path_out, size_t path_size) {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) {
         LOGE("findLibraryPath: Failed to open /proc/self/maps");
@@ -438,7 +438,7 @@ static bool findLibraryPath(const char* module_name, char* path_out, size_t path
 
 // Try to find symbol offset using dynamic symbol lookup
 // Returns 0 if symbol not found
-static uintptr_t findSymbolOffset(const char* symbol_name, const char* module_name) {
+uintptr_t findSymbolOffset(const char* symbol_name, const char* module_name) {
     LOGI("findSymbolOffset: Looking up symbol '%s' in module '%s'", symbol_name, module_name);
     
     // First, try dlopen(NULL) to search all loaded libraries
