@@ -131,6 +131,14 @@ static void (*original_l2cu_send_peer_info_req)(tL2C_LCB* p_lcb, uint16_t info_t
 // Add original pointer for BTA_DmSetLocalDiRecord
 static tBTA_STATUS (*original_BTA_DmSetLocalDiRecord)(tSDP_DI_RECORD* p_device_info, uint32_t* p_handle) = nullptr;
 
+// Store the detected library name for use by offset loaders (forward declaration)
+static char g_detected_bt_library[64] = "libbluetooth_jni.so";
+
+// Forward declarations for symbol lookup functions
+static uintptr_t getModuleBase(const char *module_name);
+static bool findLibraryPath(const char* module_name, char* path_out, size_t path_size);
+static uintptr_t findSymbolOffset(const char* symbol_name, const char* module_name);
+
 uint8_t fake_l2c_fcr_chk_chan_modes(void* p_ccb) {
     LOGI("l2c_fcr_chk_chan_modes hooked, returning true.");
     return 1;
@@ -212,6 +220,7 @@ uintptr_t loadHookOffset([[maybe_unused]] const char* package_name) {
     const char* property_name = "persist.librepods.hook_offset";
     char value[PROP_VALUE_MAX] = {0};
 
+    // 1. First check system property override (takes precedence)
     int len = __system_property_get(property_name, value);
     if (len > 0) {
         LOGI("Read hook offset from property: %s", value);
@@ -227,14 +236,23 @@ uintptr_t loadHookOffset([[maybe_unused]] const char* package_name) {
         offset = strtoul(parse_start, &endptr, 16);
 
         if (errno == 0 && endptr != parse_start && *endptr == '\0' && offset > 0) {
-            LOGI("Parsed offset: 0x%x", offset);
+            LOGI("Parsed offset from property: 0x%lx", (unsigned long)offset);
             return offset;
         }
 
         LOGE("Failed to parse offset from property value: %s", value);
     }
 
-    LOGI("Using hardcoded fallback offset");
+    // 2. Try dynamic symbol lookup
+    LOGI("Attempting dynamic symbol lookup for l2c_fcr_chk_chan_modes");
+    uintptr_t sym_offset = findSymbolOffset("l2c_fcr_chk_chan_modes", g_detected_bt_library);
+    if (sym_offset > 0) {
+        LOGI("Auto-detected l2c_fcr_chk_chan_modes offset: 0x%lx", (unsigned long)sym_offset);
+        return sym_offset;
+    }
+
+    // 3. Last resort: hardcoded fallback
+    LOGI("Using hardcoded fallback offset 0x00a55e30");
     return 0x00a55e30;
 }
 
@@ -242,6 +260,7 @@ uintptr_t loadL2cuProcessCfgReqOffset() {
     const char* property_name = "persist.librepods.cfg_req_offset";
     char value[PROP_VALUE_MAX] = {0};
 
+    // 1. First check system property override (takes precedence)
     int len = __system_property_get(property_name, value);
     if (len > 0) {
         LOGI("Read l2cu_process_our_cfg_req offset from property: %s", value);
@@ -257,14 +276,23 @@ uintptr_t loadL2cuProcessCfgReqOffset() {
         offset = strtoul(parse_start, &endptr, 16);
 
         if (errno == 0 && endptr != parse_start && *endptr == '\0' && offset > 0) {
-            LOGI("Parsed l2cu_process_our_cfg_req offset: 0x%x", offset);
+            LOGI("Parsed l2cu_process_our_cfg_req offset from property: 0x%lx", (unsigned long)offset);
             return offset;
         }
 
         LOGE("Failed to parse l2cu_process_our_cfg_req offset from property value: %s", value);
     }
 
+    // 2. Try dynamic symbol lookup
+    LOGI("Attempting dynamic symbol lookup for l2cu_process_our_cfg_req");
+    uintptr_t sym_offset = findSymbolOffset("l2cu_process_our_cfg_req", g_detected_bt_library);
+    if (sym_offset > 0) {
+        LOGI("Auto-detected l2cu_process_our_cfg_req offset: 0x%lx", (unsigned long)sym_offset);
+        return sym_offset;
+    }
+
     // Return 0 if not found - we'll skip this hook
+    LOGI("l2cu_process_our_cfg_req offset not found - skipping hook");
     return 0;
 }
 
@@ -272,6 +300,7 @@ uintptr_t loadL2cCsmConfigOffset() {
     const char* property_name = "persist.librepods.csm_config_offset";
     char value[PROP_VALUE_MAX] = {0};
 
+    // 1. First check system property override (takes precedence)
     int len = __system_property_get(property_name, value);
     if (len > 0) {
         LOGI("Read l2c_csm_config offset from property: %s", value);
@@ -287,14 +316,23 @@ uintptr_t loadL2cCsmConfigOffset() {
         offset = strtoul(parse_start, &endptr, 16);
 
         if (errno == 0 && endptr != parse_start && *endptr == '\0' && offset > 0) {
-            LOGI("Parsed l2c_csm_config offset: 0x%x", offset);
+            LOGI("Parsed l2c_csm_config offset from property: 0x%lx", (unsigned long)offset);
             return offset;
         }
 
         LOGE("Failed to parse l2c_csm_config offset from property value: %s", value);
     }
 
+    // 2. Try dynamic symbol lookup (look for l2c_csm_execute, not l2c_csm_config)
+    LOGI("Attempting dynamic symbol lookup for l2c_csm_execute");
+    uintptr_t sym_offset = findSymbolOffset("l2c_csm_execute", g_detected_bt_library);
+    if (sym_offset > 0) {
+        LOGI("Auto-detected l2c_csm_execute offset: 0x%lx", (unsigned long)sym_offset);
+        return sym_offset;
+    }
+
     // Return 0 if not found - we'll skip this hook
+    LOGI("l2c_csm_execute offset not found - skipping hook");
     return 0;
 }
 
@@ -302,6 +340,7 @@ uintptr_t loadL2cuSendPeerInfoReqOffset() {
     const char* property_name = "persist.librepods.peer_info_req_offset";
     char value[PROP_VALUE_MAX] = {0};
 
+    // 1. First check system property override (takes precedence)
     int len = __system_property_get(property_name, value);
     if (len > 0) {
         LOGI("Read l2cu_send_peer_info_req offset from property: %s", value);
@@ -317,18 +356,27 @@ uintptr_t loadL2cuSendPeerInfoReqOffset() {
         offset = strtoul(parse_start, &endptr, 16);
 
         if (errno == 0 && endptr != parse_start && *endptr == '\0' && offset > 0) {
-            LOGI("Parsed l2cu_send_peer_info_req offset: 0x%x", offset);
+            LOGI("Parsed l2cu_send_peer_info_req offset from property: 0x%lx", (unsigned long)offset);
             return offset;
         }
 
         LOGE("Failed to parse l2cu_send_peer_info_req offset from property value: %s", value);
     }
 
+    // 2. Try dynamic symbol lookup
+    LOGI("Attempting dynamic symbol lookup for l2cu_send_peer_info_req");
+    uintptr_t sym_offset = findSymbolOffset("l2cu_send_peer_info_req", g_detected_bt_library);
+    if (sym_offset > 0) {
+        LOGI("Auto-detected l2cu_send_peer_info_req offset: 0x%lx", (unsigned long)sym_offset);
+        return sym_offset;
+    }
+
     // Return 0 if not found - we'll skip this hook
+    LOGI("l2cu_send_peer_info_req offset not found - skipping hook");
     return 0;
 }
 
-uintptr_t getModuleBase(const char *module_name) {
+static uintptr_t getModuleBase(const char *module_name) {
     FILE *fp;
     char line[1024];
     uintptr_t base_addr = 0;
@@ -355,6 +403,109 @@ uintptr_t getModuleBase(const char *module_name) {
     return base_addr;
 }
 
+// Find full library path from /proc/self/maps
+static bool findLibraryPath(const char* module_name, char* path_out, size_t path_size) {
+    FILE* fp = fopen("/proc/self/maps", "r");
+    if (!fp) {
+        LOGE("findLibraryPath: Failed to open /proc/self/maps");
+        return false;
+    }
+
+    char line[1024];
+    while (fgets(line, sizeof(line), fp)) {
+        if (strstr(line, module_name)) {
+            // Find the path part (after the last space before newline)
+            char* path_start = strrchr(line, ' ');
+            if (path_start && *(path_start + 1) == '/') {
+                path_start++; // Skip the space
+                // Remove trailing newline
+                char* newline = strchr(path_start, '\n');
+                if (newline) *newline = '\0';
+                
+                strncpy(path_out, path_start, path_size - 1);
+                path_out[path_size - 1] = '\0';
+                fclose(fp);
+                LOGI("findLibraryPath: Found %s at %s", module_name, path_out);
+                return true;
+            }
+        }
+    }
+
+    fclose(fp);
+    LOGI("findLibraryPath: Could not find path for %s", module_name);
+    return false;
+}
+
+// Try to find symbol offset using dynamic symbol lookup
+// Returns 0 if symbol not found
+static uintptr_t findSymbolOffset(const char* symbol_name, const char* module_name) {
+    LOGI("findSymbolOffset: Looking up symbol '%s' in module '%s'", symbol_name, module_name);
+    
+    // First, try dlopen(NULL) to search all loaded libraries
+    void* handle = dlopen(NULL, RTLD_NOW);
+    if (handle) {
+        dlerror(); // Clear any existing error
+        void* sym_addr = dlsym(handle, symbol_name);
+        const char* error = dlerror();
+        
+        if (sym_addr && !error) {
+            uintptr_t base_addr = getModuleBase(module_name);
+            if (base_addr > 0) {
+                uintptr_t offset = reinterpret_cast<uintptr_t>(sym_addr) - base_addr;
+                LOGI("findSymbolOffset: Found '%s' via dlopen(NULL) at %p, base=%p, offset=0x%lx",
+                     symbol_name, sym_addr, (void*)base_addr, (unsigned long)offset);
+                dlclose(handle);
+                return offset;
+            } else {
+                LOGE("findSymbolOffset: Found symbol but couldn't get module base for %s", module_name);
+            }
+        } else {
+            LOGI("findSymbolOffset: dlsym(NULL, '%s') failed: %s", symbol_name, error ? error : "symbol not found");
+        }
+        dlclose(handle);
+    } else {
+        LOGE("findSymbolOffset: dlopen(NULL) failed: %s", dlerror());
+    }
+    
+    // Second attempt: try to dlopen the library directly by path
+    char lib_path[512];
+    if (findLibraryPath(module_name, lib_path, sizeof(lib_path))) {
+        dlerror(); // Clear any existing error
+        void* lib_handle = dlopen(lib_path, RTLD_NOW | RTLD_NOLOAD);
+        if (!lib_handle) {
+            // Library might not be loaded yet, try loading it
+            lib_handle = dlopen(lib_path, RTLD_NOW);
+        }
+        
+        if (lib_handle) {
+            dlerror(); // Clear any existing error
+            void* sym_addr = dlsym(lib_handle, symbol_name);
+            const char* error = dlerror();
+            
+            if (sym_addr && !error) {
+                uintptr_t base_addr = getModuleBase(module_name);
+                if (base_addr > 0) {
+                    uintptr_t offset = reinterpret_cast<uintptr_t>(sym_addr) - base_addr;
+                    LOGI("findSymbolOffset: Found '%s' via dlopen('%s') at %p, base=%p, offset=0x%lx",
+                         symbol_name, lib_path, sym_addr, (void*)base_addr, (unsigned long)offset);
+                    dlclose(lib_handle);
+                    return offset;
+                } else {
+                    LOGE("findSymbolOffset: Found symbol but couldn't get module base");
+                }
+            } else {
+                LOGI("findSymbolOffset: dlsym('%s', '%s') failed: %s", lib_path, symbol_name, error ? error : "symbol not found");
+            }
+            dlclose(lib_handle);
+        } else {
+            LOGE("findSymbolOffset: dlopen('%s') failed: %s", lib_path, dlerror());
+        }
+    }
+    
+    LOGI("findSymbolOffset: Could not find symbol '%s' via dynamic lookup", symbol_name);
+    return 0;
+}
+
 bool findAndHookFunction(const char *library_name) {
     if (!hook_func) {
         LOGE("Hook function not initialized");
@@ -367,7 +518,12 @@ bool findAndHookFunction(const char *library_name) {
         return false;
     }
 
-    // Load all offsets from system properties - no hardcoding
+    // Store the library name for use by offset loaders
+    strncpy(g_detected_bt_library, library_name, sizeof(g_detected_bt_library) - 1);
+    g_detected_bt_library[sizeof(g_detected_bt_library) - 1] = '\0';
+    LOGI("Using Bluetooth library: %s", g_detected_bt_library);
+
+    // Load all offsets - tries dynamic symbol lookup first, then properties, then hardcoded
     uintptr_t l2c_fcr_offset = loadHookOffset(nullptr);
     uintptr_t l2cu_process_our_cfg_req_offset = loadL2cuProcessCfgReqOffset();
     uintptr_t l2c_csm_config_offset = loadL2cCsmConfigOffset();
